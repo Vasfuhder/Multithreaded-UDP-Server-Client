@@ -7,20 +7,21 @@ import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.Random;
 import java.util.Scanner;
 import java.util.TimerTask;
 
 public class UDPClient {
 	
-	public static void normal() {
+	public static void normal(String host, int porta) {
 		System.out.print("Insira a quantidade de clientes que deseja criar: ");
 		Scanner in = new Scanner(System.in);
 		int qtde = in.nextInt();
 		ArrayList<Cliente> clientes = new ArrayList<>();
 		ArrayList<Thread> threads = new ArrayList<>();
 		for(int i = 0; i < qtde; i++) {
-			Cliente cliente = new Cliente("Cliente "+String.valueOf(i), "localhost", 8000);
+			Cliente cliente = new Cliente("Cliente "+String.valueOf(i), host, porta);
 			clientes.add(cliente);
 			Thread t = new Thread(cliente);
 			threads.add(t);
@@ -38,13 +39,13 @@ public class UDPClient {
 		in.close();
 	}
 	
-	public static void demonstracaoTimeOut() {
+	public static void demonstracaoTimeOut(String host, int porta) {
 		try {
 			DatagramSocket s = new DatagramSocket();
 			System.out.println("Enviando uma resposta...");
 			String resposta = "1;5;FFFFF";
 			System.out.println(resposta);
-			DatagramPacket req = new DatagramPacket(resposta.getBytes(), resposta.length(), InetAddress.getByName("localhost"), 8000);
+			DatagramPacket req = new DatagramPacket(resposta.getBytes(), resposta.length(), InetAddress.getByName(host), porta);
 			s.send(req);
 			
 			//aguardando resposta
@@ -63,13 +64,24 @@ public class UDPClient {
 	}
 	
 	public static void main(String[] args) {
+		String host;
+		int porta;
+		String user = System.getProperty("user.name");
+		if(Objects.nonNull(args[0])) host = args[0];
+		else host = "localhost";
+		if(Objects.nonNull(args[1])) porta = Integer.parseInt(args[1]);
+		else porta = 8000;
+
+		System.out.println("Ola, "+user+" :)");
+		System.out.println("Host configurado ("+host+":"+String.valueOf(porta)+")");
+
 		System.out.print("Insira o modo (normal, timeout): ");
 		Scanner in = new Scanner(System.in);
 		String modo = in.nextLine();
 		
 		switch (modo) {
-			case "timeout": demonstracaoTimeOut(); break;
-			case "normal": normal(); break;
+			case "timeout": demonstracaoTimeOut(host, porta); break;
+			case "normal": normal(host, porta); break;
 			default: System.out.println("Modo inválido...") ; break;
 		}
 		
