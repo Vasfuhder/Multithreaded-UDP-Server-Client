@@ -1,5 +1,3 @@
-package br.unifesspa.edu.br;
-
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -10,7 +8,6 @@ import java.util.ArrayList;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Scanner;
-import java.util.TimerTask;
 
 public class UDPClient {
 	
