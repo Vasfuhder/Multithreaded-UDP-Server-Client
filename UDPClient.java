@@ -63,6 +63,27 @@ public class UDPClient {
 		}
 	}
 	
+	public static boolean pingServer(String host, int porta) {
+		try {
+			String msg = "HELLO";
+			DatagramSocket s = new DatagramSocket();
+			s.setSoTimeout(3000);
+			DatagramPacket req = new DatagramPacket(msg.getBytes(), msg.length(), InetAddress.getByName(host), porta);
+			s.send(req);
+			
+			byte[] buffer = new byte[1024];
+			DatagramPacket resp = new DatagramPacket(buffer, buffer.length);
+			s.receive(resp);
+			String str = new String(buffer).trim();
+			if(str.equals("HELLO")) return true;
+		} 
+		catch (SocketException e) {return false;} 
+		catch (UnknownHostException e) {return false;} 
+		catch (IOException e) {return false;}
+		
+		return false;
+	}
+	
 	public static void main(String[] args) {
 		String host;
 		int porta;
@@ -72,6 +93,10 @@ public class UDPClient {
 		if(Objects.nonNull(args[1])) porta = Integer.parseInt(args[1]);
 		else porta = 8000;
 
+		if(!pingServer(host, porta)) {
+			System.out.println("Host inacessível!");
+			System.exit(1);
+		}
 		System.out.println("Ola, "+user+" :)");
 		System.out.println("Host configurado ("+host+":"+String.valueOf(porta)+")");
 

@@ -3,8 +3,10 @@ package br.unifesspa.edu.br;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Objects;
 import java.util.TimerTask;
@@ -27,6 +29,7 @@ class Server {
 	private static ArrayList<Server> instances = new ArrayList<>();
 	private ArrayList<Sessao> sessoes = new ArrayList<>();
 	private DatagramSocket socket = null;
+	private int porta = 8000;
 	private boolean running = true;
 	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
@@ -42,14 +45,14 @@ class Server {
 				}
 			}
 			System.out.println(String.valueOf(counter) + " sessões finalizadas/inativas foram removidas (total atual: "
-					+ String.valueOf(sessoes.size()) + ")\n");
-			System.out.println("Serviço de limpeza finalizado...");
+					+ String.valueOf(sessoes.size()) + ")");
+			System.out.println("Serviço de limpeza finalizado...\n");
 		}
 	}
 
 	protected Server(int porta) {
-		scheduler.scheduleAtFixedRate(new SessionCleaner(), 10, 10, TimeUnit.SECONDS);
 		try {
+			this.porta = porta;
 			this.socket = new DatagramSocket(porta);
 		} catch (SocketException e) {
 			e.printStackTrace();
@@ -66,20 +69,48 @@ class Server {
 		}
 	}
 
+	public void sendMessage(String message, DatagramPacket req) {
+		DatagramPacket resp = new DatagramPacket(message.getBytes(), message.length(), req.getAddress(), req.getPort());
+		try {this.getSocket().send(resp);} catch (IOException e) {e.printStackTrace();}
+	}
+	
+	public String LanIP() {
+		try(final DatagramSocket socket = new DatagramSocket()){
+			  socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
+			  String ip = socket.getLocalAddress().getHostAddress();
+			  return ip+":"+String.valueOf(this.porta);
+		} catch (SocketException e) {
+			e.printStackTrace();
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+		}
+		return "localhost:"+String.valueOf(this.porta);
+	}
+	
 	public void start() throws IOException {
-		System.out.println("Servidor escutando em " + this.getSocket().getLocalSocketAddress());
+		//iniciando serviço de limpeza
+		scheduler.scheduleAtFixedRate(new SessionCleaner(), 10, 10, TimeUnit.SECONDS);
+		
+		System.out.println("Servidor disponível em "+this.LanIP());
 		while (this.isRunning()) {
 			byte[] buffer = new byte[1024];
 			DatagramPacket req = new DatagramPacket(buffer, buffer.length);
 			this.getSocket().receive(req);
-			System.out.println("Request recebido do cliente na porta " + req.getPort());
-
-			// verificando se o cliente possui uma sessao ativa
-			Sessao s = this.findSession(req.getAddress(), req.getPort());
-			if (Objects.isNull(s))
-				this.adicionaSessao(req, this.getSocket());
-			else
-				s.novaResposta(new String(req.getData()));
+			String str = new String(req.getData());
+			if(str.trim().equals("HELLO")) {
+				System.out.println("Ping recebido (porta "+String.valueOf(req.getPort())+")");
+				this.sendMessage("HELLO", req);
+				System.out.println("Pong enviado (porta: "+String.valueOf(req.getPort())+")");
+			}
+			else {
+				// verificando se o cliente possui uma sessao ativa
+				Sessao s = this.findSession(req.getAddress(), req.getPort());
+				if (Objects.isNull(s))
+					this.adicionaSessao(req, this.getSocket());
+				else
+					s.novaResposta(new String(req.getData()));				
+			}
+			
 		}
 	}
 
