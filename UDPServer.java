@@ -36,7 +36,7 @@ class Server {
 	}
 	
 	public static Server factory(int porta) throws Exception {
-		if(Server.instances.size() > 0) throw new Exception("Só é possível instanciar um servidor.");
+		if(Server.instances.size() > 0) throw new Exception("Só é possível criar 1 instância de servidor.");
 		else {
 			Server instancia = new Server(porta);
 			Server.instances.add(instancia);
@@ -56,7 +56,6 @@ class Server {
 			Sessao s = this.findSession(req.getAddress(), req.getPort());
 			if(Objects.isNull(s)) this.adicionaSessao(req, this.getSocket());
 			else s.novaResposta(new String(req.getData()));
-			
 		}
 	}
 	
@@ -133,8 +132,8 @@ class Sessao extends Thread {
 			String[] respostaCerta = Questionario.q.get(i).split(";")[2].split("");
 			int acertos = 0;
 			
-			for(int j = 0; j < respostaUser.length; j++) {
-				if (respostaUser[i].equals(respostaCerta[j])) acertos++;
+			for(int j = 0; j < respostaCerta.length; j++) {
+				if (respostaUser[j].equals(respostaCerta[j])) acertos++;
 			}
 			
 			gabarito.add(String.valueOf(i+1)+";"+String.valueOf(acertos)+";"+String.valueOf(respostaCerta.length-acertos));
@@ -190,11 +189,11 @@ class Sessao extends Thread {
 		this.ds = ds;
 	}
 
-	public boolean isCompleted() {
+	public synchronized boolean isCompleted() {
 		return completed;
 	}
-
-	public void setCompeted(boolean completed) {
+	
+	public synchronized void setCompeted(boolean completed) {
 		this.completed = completed;
 	}
 
