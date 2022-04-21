@@ -12,13 +12,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class UDPServer {
-	public static void main(String[] args) {
-		try {
-			Server udpServer = Server.factory(8000);
-			udpServer.start();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+	public static void main(String[] args) throws Exception {
+		Server udpServer = Server.getInstance();
+		udpServer.configure(8000, 10, 10);
+		udpServer.start();
 	}
 }
 
@@ -26,14 +23,16 @@ class Server {
 	private static ArrayList<Server> instances = new ArrayList<>();
 	private ArrayList<Sessao> sessoes = new ArrayList<>();
 	private DatagramSocket socket = null;
-	private int porta = 8000;
+	private int porta = 0;
+	private int threadTimeout = 0;
+	private int cleanTime = 0;
 	private boolean running = true;
 	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-
+	
 	class SessionCleaner extends TimerTask {
 		@Override
 		public void run() {
-			System.out.println("\nIniciando serviço de limpeza...");
+			System.out.println("\nIniciando servico de limpeza...");
 			int counter = 0;
 			for (int i = 0; i < sessoes.size(); i++) {
 				if (!sessoes.get(i).isAlive()) {
@@ -41,31 +40,41 @@ class Server {
 					sessoes.remove(i);
 				}
 			}
-			System.out.println(String.valueOf(counter) + " sessões finalizadas/inativas foram removidas (total atual: "
+			System.out.println(String.valueOf(counter) + " sessoes finalizadas/inativas foram removidas (total atual: "
 					+ String.valueOf(sessoes.size()) + ")");
-			System.out.println("Serviço de limpeza finalizado...\n");
+			System.out.println("Servico de limpeza finalizado...\n");
 		}
 	}
 
-	protected Server(int porta) {
-		try {
-			this.porta = porta;
-			this.socket = new DatagramSocket(porta);
-		} catch (SocketException e) {
-			e.printStackTrace();
-		}
-	}
+	protected Server() {}
 
-	public static Server factory(int porta) throws Exception {
+	public static Server getInstance() throws Exception {
 		if (Server.instances.size() > 0)
-			throw new Exception("Só é possível criar 1 instância de servidor.");
+			return Server.instances.get(0);
 		else {
-			Server instancia = new Server(porta);
+			Server instancia = new Server();
 			Server.instances.add(instancia);
 			return instancia;
 		}
 	}
 
+	public void configure(int porta, int threadTimeout, int cleanTimer) throws SocketException {
+		this.setPorta(porta);
+		this.setThreadTimeout(threadTimeout);
+		this.setCleanTime(cleanTimer);
+		
+		DatagramSocket s = new DatagramSocket(this.getPorta());
+		this.setSocket(s);
+	}
+	
+	public boolean canStart() {
+		if (this.getPorta() == 0) return false;
+		if (this.getCleanTime() == 0) return false;
+		if (this.getThreadTimeout() == 0) return false;
+
+		return true;
+	}
+	
 	public void sendMessage(String message, DatagramPacket req) {
 		DatagramPacket resp = new DatagramPacket(message.getBytes(), message.length(), req.getAddress(), req.getPort());
 		try {this.getSocket().send(resp);} catch (IOException e) {e.printStackTrace();}
@@ -84,9 +93,12 @@ class Server {
 		return "localhost:"+String.valueOf(this.porta);
 	}
 	
-	public void start() throws IOException {
+	public void start() throws IOException, Exception {
+		if (!this.canStart()) 
+			throw new Exception("Nao foi possivel iniciar o servidor. Configuracao invalida!");
+		
 		//iniciando serviço de limpeza
-		scheduler.scheduleAtFixedRate(new SessionCleaner(), 10, 10, TimeUnit.SECONDS);
+		scheduler.scheduleAtFixedRate(new SessionCleaner(), 10, this.getCleanTime(), TimeUnit.SECONDS);
 		
 		System.out.println("Servidor disponível em "+this.LanIP());
 		while (this.isRunning()) {
@@ -122,7 +134,7 @@ class Server {
 	}
 
 	public void adicionaSessao(DatagramPacket req, DatagramSocket ds) {
-		Sessao t = new Sessao(req.getAddress(), req.getPort(), new String(req.getData()), ds);
+		Sessao t = new Sessao(req.getAddress(), req.getPort(), new String(req.getData()), ds, this.getThreadTimeout());
 		this.getSessoes().add(t);
 		t.start();
 	}
@@ -150,6 +162,30 @@ class Server {
 	public void setRunning(boolean running) {
 		this.running = running;
 	}
+
+	public int getPorta() {
+		return porta;
+	}
+
+	public void setPorta(int porta) {
+		this.porta = porta;
+	}
+
+	public int getThreadTimeout() {
+		return threadTimeout;
+	}
+
+	public void setThreadTimeout(int threadTimeout) {
+		this.threadTimeout = threadTimeout;
+	}
+
+	public int getCleanTime() {
+		return cleanTime;
+	}
+
+	public void setCleanTime(int cleanTime) {
+		this.cleanTime = cleanTime;
+	}
 }
 
 class Sessao extends Thread {
@@ -158,17 +194,18 @@ class Sessao extends Thread {
 	private DatagramSocket ds;
 	private ArrayList<String> respostas = new ArrayList<>();
 	private boolean completed = false;
+	
+	// dados timer
+	private int threadTimeout;
+	private long start;
+	private long end;
 
-	// timer
-	private int segundos = 10;
-	private long start = System.currentTimeMillis();
-	private long end = start + segundos * 1000;
-
-	Sessao(InetAddress adress, int porta, String resposta, DatagramSocket ds) {
-		this.setPorta(porta);
+	Sessao(InetAddress adress, int porta, String resposta, DatagramSocket ds, int threadTimeout) {
 		this.setAdress(adress);
+		this.setPorta(porta);
 		this.novaResposta(resposta);
 		this.setDs(ds);
+		this.setThreadTimeout(threadTimeout);
 	}
 
 	public synchronized void novaResposta(String resposta) {
@@ -178,7 +215,7 @@ class Sessao extends Thread {
 			this.setCompeted(true);
 	}
 
-	public ArrayList<String> calcularGabarito() {
+	public synchronized ArrayList<String> calcularGabarito() {
 		System.out.println("Calculando gabarito do cliente " + String.valueOf(this.getPorta()));
 		ArrayList<String> gabarito = new ArrayList<>();
 		for (int i = 0; i < Questionario.q.size(); i++) {
@@ -198,8 +235,8 @@ class Sessao extends Thread {
 	}
 
 	public synchronized void enviarGabarito() {
-		System.out.println("Enviando gabarito para o cliente " + String.valueOf(this.getPorta()));
 		ArrayList<String> gabarito = this.calcularGabarito();
+		System.out.println("Enviando gabarito para o cliente " + String.valueOf(this.getPorta()));
 		for (String i : gabarito) {
 			DatagramPacket resp = new DatagramPacket(i.getBytes(), i.length(), this.getAdress(), this.getPorta());
 			try {
@@ -224,7 +261,7 @@ class Sessao extends Thread {
 		return porta;
 	}
 
-	public void setPorta(int porta) {
+	public synchronized void setPorta(int porta) {
 		this.porta = porta;
 	}
 
@@ -232,7 +269,7 @@ class Sessao extends Thread {
 		return adress;
 	}
 
-	public void setAdress(InetAddress adress) {
+	public synchronized void setAdress(InetAddress adress) {
 		this.adress = adress;
 	}
 
@@ -244,11 +281,11 @@ class Sessao extends Thread {
 		this.respostas = respostas;
 	}
 
-	public DatagramSocket getDs() {
+	public synchronized DatagramSocket getDs() {
 		return ds;
 	}
 
-	public void setDs(DatagramSocket ds) {
+	public synchronized void setDs(DatagramSocket ds) {
 		this.ds = ds;
 	}
 
@@ -258,6 +295,16 @@ class Sessao extends Thread {
 
 	public synchronized void setCompeted(boolean completed) {
 		this.completed = completed;
+	}
+
+	public synchronized int getThreadTimeout() {
+		return threadTimeout;
+	}
+
+	public synchronized void setThreadTimeout(int threadTimeout) {
+		this.threadTimeout = threadTimeout;
+		this.start = System.currentTimeMillis();
+		this.end = this.start + threadTimeout * 1000;
 	}
 
 	@Override

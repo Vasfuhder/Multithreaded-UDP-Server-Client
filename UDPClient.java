@@ -5,7 +5,6 @@ import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Objects;
 import java.util.Random;
 import java.util.Scanner;
 
@@ -29,9 +28,9 @@ public class UDPClient {
 		
 		for (int i = 0; i < qtde; i++) {
 			System.out.println("\nRespostas enviadas pelo cliente {"+clientes.get(i).getName()+"}");
-			for (String resp : clientes.get(i).getRespostas()) System.out.println(resp);
+			for (String resp : clientes.get(i).getRespostas()) System.out.println("    "+resp);
 			System.out.println("Gabarito: ");
-			for (String gab : clientes.get(i).getGabarito()) System.out.println(gab);
+			for (String gab : clientes.get(i).getGabarito()) System.out.println("    "+gab);
 		}
 		in.close();
 	}
@@ -58,7 +57,7 @@ public class UDPClient {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-	}
+	} 
 	
 	public static boolean pingServer(String host, int porta) {
 		try {
@@ -85,10 +84,13 @@ public class UDPClient {
 		String host;
 		int porta;
 		String user = System.getProperty("user.name");
-		if(Objects.nonNull(args[0])) host = args[0];
-		else host = "localhost";
-		if(Objects.nonNull(args[1])) porta = Integer.parseInt(args[1]);
-		else porta = 8000;
+		if (args.length > 0) {
+			host = args[0];
+			porta = Integer.parseInt(args[1]);
+		} else {
+			host = "localhost";
+			porta = 8000;
+		}
 
 		if(!pingServer(host, porta)) {
 			System.out.println("Host inacessível!");
